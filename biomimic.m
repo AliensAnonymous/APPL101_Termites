@@ -1,3 +1,5 @@
+%kdutcher 0-27-2022 03:14
+
 clear; clc; close all;
 totalTimeLength = 20000;
 dt = 0.75;
