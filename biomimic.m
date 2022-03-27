@@ -1,6 +1,21 @@
 clear; clc; close all;
-totalTimeLength = 1000;  
-simTimeSteps = 1000;
+totalTimeLength = 20000;
+dt = 0.75;
+dx = 0.01;
+simTimeSteps = int64(totalTimeLength/dt);
+
+%It should be noted that heats move ONLY by conduction and convection in
+%this simulation. In reality, heat rising(that is, air rising as it
+%decreases in density) also contributes greatly to the distribution of heat
+%in the atmosphere. This air is acting like a solid, and is not moving.
+
+
+I = imread('termite_mound.png');
+[rows, columns, numberOfColorChannels] = size(I);
+redChannel = I(:, :, 1);
+greenChannel = I(:, :, 2);
+blueChannel = I(:, :, 3);
+material = (redChannel == 96) & (greenChannel == 56) & (blueChannel == 19);
 % https://www.researchgate.net/publication/304719050_An_Investigation_into_the_Thermal_Properties_of_Termite_Mound_Clay_Applicable_to_Grain_Silo_Construction#pf3
 airSH = 1003.5;% Specific Heat of Air - J/kg/C
 tmcSH = 2576.9;% Specific Heat of TMC (Termite Mound Clay) - J/kg/C 
@@ -12,37 +27,42 @@ airResist = 1/(airSH * airDensity);% Air Material Resistance
 tmcResist = 1/(tmcSH * tmcDensity);% TMC Material Resistance
 airCon = airTC * (totalTimeLength/simTimeSteps); % Air Adjusted Conductivity
 tmcCon = tmcTC * (totalTimeLength/simTimeSteps); % TMC Adjusted Conductivity
-h = 5;
-b = 100;
-simX = 40;
-simY = 40;
+simX = columns;
+simY = rows;
 temp = zeros(simY, simX);
 temp1 = zeros(simY, simX);
 heatSource = 38;
 coldSource = 14;
-map = ones(simY, simX);
-simXhalf = int64(simX/2)
-simYhalf = int64(simY/2)
-map(1:simXhalf, :) = 0;
-map(simYhalf:simY, :) = 1;
-temp(2:simYhalf, :) = (heatSource + coldSource)/2;
-temp(simYhalf+1:simY, :) = coldSource;
-temp(1, :) = heatSource;
+map = zeros(simY, simX);
+simXhalf = int64(simX/2);
+simYhalf = int64(simY/2);
+map(material) = 1;
+temp(:, :) = (heatSource + coldSource)/2;
+temp(material) = 14;
 temp(simY, :) = coldSource;
-dt = totalTimeLength/simTimeSteps;
-dx = 0.01;
+solar = 24*dt*dx^2;
+
+q_x_first = ones(simX);
+%set up an initial condition of solar irradiation
+
 
 f1 = figure('Position',[1000, 100, 500, 500]);
 temp1 = temp;
 imagesc(temp1, [14 38]);
-drawnow;
+colorbar;
 
+drawnow;
 dTemp = 0;
 q_right = 0;
 q_down = 0;
 q_up = zeros(simX, 1);
+t_half = int64(simTimeSteps/2);
+
 % Start Calcuations
+%with initial conditions, it acts like the sun just rose and is starting to
+%add heat to the system
 for t = 1:simTimeSteps
+    q_x_first = ones(simX);
     %calculate heat for first row
     for x = 1:simX
         q_up(x) = conduct(airTC, temp(1, x), temp(2, x), dt, dx);
@@ -62,11 +82,17 @@ for t = 1:simTimeSteps
                p = tmcDensity;
            end
            q0 = q_up(x) + q_left;
+           if (q_x_first(x) == 1 && map(y+1, x) == 1)
+                %a negative heat signifies negative heat-flow, meaning heat is flowing in
+                q0 = q0 - solar;  
+                q_x_first(x) = 0;
+           end
            [dTemp, q_right, q_down] = heat(q0, dt, dx, temp(y, x), temp(y, x+1), temp(y+1, x), k, p, c, map(y, x), map(y, x+1), map(y+1, x));
            q_left = -q_right;
            q_up(x) = q_down;
            temp1(y, x) = temp(y, x) + dTemp;
         end
+        %deal with the last row of x (needs to be done seperately)
         if (map(y, simX) == map(y+1, simX))
             q_down = conduct(k, temp(y, simX), temp(y+1, simX), dt, dx);
         else
@@ -80,7 +106,9 @@ for t = 1:simTimeSteps
     end  
     temp = temp1;
     imagesc(temp1, [14 38]);
+    colorbar
     drawnow;
+
 end
 
 function [dT, q_right, q_down] = heat(q0, dt, dx, T1, T2, T3, k, p, c, m_self, m_right, m_down)
