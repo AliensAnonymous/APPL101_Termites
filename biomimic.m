@@ -148,7 +148,7 @@ end
 %turn off the sun
 temp(1, :) = coldSource;
 solar = 5*dt*dx^2;
-for t = 1:simTimeSteps
+for t = 1:t_half
     %reset values for the "first" non-air material
     q_x_first = ones(simX, 1);
     %calculate heat for first row
