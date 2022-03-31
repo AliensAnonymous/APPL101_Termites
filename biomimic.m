@@ -43,7 +43,7 @@ map(material) = 1; %"copies" the image to be a binary yes/no where the termite m
 temp(:, :) = (heatSource + coldSource)/2;%average of the cold/hot source
 temp(material) = 14;
 temp(simY, :) = coldSource;
-solar =24*dt*dx^2; %energy reflected by the sun
+solar = 452*dt*dx^2*0.3; %energy re-radiated by the surface and absorbed by the atmosphere 
 q_x_first = ones(simX); %this is to store where the the sun lands
 %set up an initial condition of solar irradiation
 
@@ -138,7 +138,8 @@ for t = 1:t_half
         temp1(y, simX) = temp(y, simX) + dTemp;
     end  
     %set new temps
-    temp = fluid(temp1, map, t, simY, simX, coldSource); %fluid dynamics
+    temp = fluid(temp1, map, t, simY, simX, midSource); %fluid dynamics
+    temp = fluid(temp, map, t, simY, simX, midSource); %fluid dynamics
     imagesc(temp, [14 38]);
     colorbar
     drawnow;
@@ -146,7 +147,8 @@ end
 
 %turn off the sun
 temp(1, :) = coldSource;
-for t = 1:t_half
+solar = 5*dt*dx^2;
+for t = 1:simTimeSteps
     %reset values for the "first" non-air material
     q_x_first = ones(simX, 1);
     %calculate heat for first row
@@ -180,6 +182,17 @@ for t = 1:t_half
            end
            %calculate heat from the up/left
            q0 = q_up(x) + q_left;
+           if (q_x_first(x) == 1 && map(y+1, x) == 1 && mat == 0)
+                %a negative heat signifies negative heat-flow, meaning heat is flowing in
+                q0 = q0 - solar;  
+                q_x_first(x) = 0;
+           end
+           %calculate the difference in temperature, and heat from down and
+           %the right
+           [dTemp, q_right, q_down] = heat(q0, dt, dx, temp(y, x), temp(y, x+1), temp(y+1, x), k, p, c, map(y, x), map(y, x+1), map(y+1, x));
+           q_left = -q_right;
+           q_up(x) = q_down;
+           temp1(y, x) = temp(y, x) + dTemp;
            %calculate the difference in temperature, and heat from down and
            %the right
            [dTemp, q_right, q_down] = heat(q0, dt, dx, temp(y, x), temp(y, x+1), temp(y+1, x), k, p, c, map(y, x), map(y, x+1), map(y+1, x));
@@ -257,7 +270,7 @@ end
 %just a lot of if/else statements that swap temps to mimicing moving air
 function new_temp = fluid(temp, map, t, simY, simX, midSource)
     new_temp = temp;
-    %temp(1, :) = coldSource;
+    temp(1, :) = midSource;
     %temp(:, 1) = midSource;
     %temp(:, simX) = coldSource;
     start = 2;
@@ -290,16 +303,16 @@ function new_temp = fluid(temp, map, t, simY, simX, midSource)
                         temp(y, x) = new_temp(y, x);
                         temp(y-1, x) = new_temp(y-1, x);
                     end
-                end
-                if (map(y, x+bias) == 0) %if it doesnt
+                %end
+                elseif (map(y, x+bias) == 0) %if it doesnt
                     if (temp(y, x) > temp(y, x+bias))
                         new_temp(y, x) = temp(y, x+bias);
                         new_temp(y, x+bias) = temp(y, x);
                         temp(y, x) = new_temp(y, x);
                         temp(y, x+bias) = new_temp(y, x+bias);
                     end
-                end
-                if (map(y, x-bias) == 0 )
+                %end
+                elseif (map(y, x-bias) == 0 )
                     if (temp(y, x) > temp(y, x-bias))
                         new_temp(y, x) = temp(y, x-bias);
                         new_temp(y, x-bias) = temp(y, x);
